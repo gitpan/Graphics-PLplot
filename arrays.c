@@ -16,6 +16,10 @@ Dec 96: Add 'ref to scalar is binary' handling  - kgb@aaoepp.aao.gov.au
 Jan 97: Handles undefined values as zero        - kgb@aaoepp.aao.gov.au
 Feb 97: Fixed a few type cast howlers+bugs      - kgb@aaoepp.aao.gov.au
 Apr 97: Add support for unsigned char and shorts- timj@jach.hawaii.edu
+Mar 04: Add 'v' type (for pointer arrays)       - timj@jach.hawaii.edu
+        Add _sz variants that return the number
+        of elements processed by packXD.
+        -Wall clean
    
 */
 
@@ -69,10 +73,34 @@ T_FLOATP
 T_DOUBLEP
 	$var = ($type)pack1D($arg,'d')
 
+
+pack1D_sz() is the same as pack1D except a pointer to an int
+   can be supplied as third argument which will contain the
+   number of elements in the array on completion.
+   Will be set to -1 if this function was called with something
+   other than an array (eg a PDL).
+
+   Note that to use this from a typemap you will need to declare the
+   size variables your self. A reasonable convention is to adopt the
+   ix_$var convention for number of elements as used in the standard
+   T_ARRAY typemap entry.
+
+
+T_PACKEDINT
+      U32 ix_$var;
+      $var = ($type)pack1D($arg,'d',ix_$var)
+
+   Although this may cause problems with your compiler if you have more than
+   one array in your argument list.
+
 */
 
 void* pack1D ( SV* arg, char packtype ) {
+  int nelem;
+  return pack1D_sz( arg, packtype, &nelem );
+}
 
+void* pack1D_sz( SV* arg, char packtype, int * nelem) {
    int iscalar;
    float scalar;
    double dscalar;
@@ -85,12 +113,15 @@ void* pack1D ( SV* arg, char packtype ) {
    double nval;
    STRLEN len;
 
+   /* assume no size known */
+   if (nelem != NULL) *nelem = -1;
+
    if (is_scalar_ref(arg))                 /* Scalar ref */
       return (void*) SvPV(SvRV(arg), len);
    
    if (packtype!='f' && packtype!='i' && packtype!='d' && packtype!='s'
        && packtype != 'u')
-       croak("Programming error: invalid type conversion specified to pack1D");
+       Perl_croak(aTHX_ "Programming error: invalid type conversion specified to pack1D");
    
    /* 
       Create a work char variable - be cunning and make it a mortal *SV
@@ -139,7 +170,10 @@ void* pack1D ( SV* arg, char packtype ) {
       }
    
       n = av_len(array);
-   
+
+      if ( nelem != NULL )
+	*nelem = n + 1;
+ 
       if (packtype=='f')
           SvGROW( work, sizeof(float)*(n+1) );  /* Pregrow for efficiency */
       if (packtype=='i')
@@ -195,7 +229,7 @@ void* pack1D ( SV* arg, char packtype ) {
    
    errexit:
    
-   croak("Routine can only handle scalar values or refs to 1D arrays of scalars");
+   Perl_croak(aTHX_ "Routine can only handle scalar values or refs to 1D arrays of scalars");
 
 }
 
@@ -231,10 +265,21 @@ T_FLOAT2DP
 
 [int2D/float2D would be typedef'd to int/float]
 
+pack2D_sz() is the same as pack2D except a pointer to two ints
+   can be supplied as third and fourth argument which will contain the
+   number of elements in the array on completion.
+   Will be set to -1 if this function was called with something
+   other than an array (eg a PDL).
+
 */
 
-
 void* pack2D ( SV* arg, char packtype ) {
+  int nx;
+  int ny;
+  return pack2D_sz( arg, packtype, &nx, &ny );
+}
+
+void* pack2D_sz ( SV* arg, char packtype, int *nx, int *ny ) {
 
    int iscalar;
    float scalar;
@@ -242,13 +287,17 @@ void* pack2D ( SV* arg, char packtype ) {
    double dscalar;
    unsigned char uscalar;
    AV* array;
-   AV* array2;
-   I32 i,j,n,m;
+   AV* array2 = Nullav;
+   I32 i,j,n,m,m_old;
    SV* work;
    SV** work2;
-   double nval;
+   double nval = 0.0;
    int isref;
    STRLEN len;
+
+   if (nx != NULL) *nx = -1;
+   if (ny != NULL) *ny = -1;
+   m_old = -1;
 
    if (is_scalar_ref(arg))                 /* Scalar ref */
       return (void*) SvPV(SvRV(arg), len);
@@ -281,6 +330,7 @@ void* pack2D ( SV* arg, char packtype ) {
       }
    
       n = av_len(array);
+      if (nx != NULL) *nx = n + 1;
       
       /* Pack array into string */
    
@@ -293,11 +343,17 @@ void* pack2D ( SV* arg, char packtype ) {
             if (isref) {
                array2 = (AV *) SvRV(*work2);  /* array of 2nd dimension */
                m = av_len(array2);            /* Length */
-            }else{
+            } else {
                m=0;                          /* 1D array */
                nval = SvNV(*work2);               
             }
-   
+
+            /* first time around store value in m_old else compare*/
+            if (m_old != -1 && m_old != m)
+               Perl_croak(aTHX_ "2D array is not rectangular. Row %d has %d elements, not %d",(n+1),(m+1),(m_old+1));
+            m_old = m;
+
+
             /* Pregrow storage for efficiency on first row - note assumes 
                array is rectangular but better than nothing  */
    
@@ -311,7 +367,7 @@ void* pack2D ( SV* arg, char packtype ) {
                if (packtype=='u')
                  SvGROW( work, sizeof(char)*(n+1)*(m+1) );
 	       if (packtype=='d')
-		 SvGROW( work, sizeof(double)*(n+1) );
+		 SvGROW( work, sizeof(double)*(n+1)*(m+1) );
             }
    
             for(j=0; j<=m; j++) {  /* Loop over 2nd dimension */
@@ -350,6 +406,9 @@ void* pack2D ( SV* arg, char packtype ) {
             }
       }
    
+      /* Store ny */
+      if (ny != NULL) *ny = m + 1;
+
       /* Return a pointer to the byte array */
    
       return (void *) SvPV(work, PL_na);
@@ -484,9 +543,7 @@ void pack_element(SV* work, SV** arg, char packtype) {
       return;
    }
    
-   errexit:
-   
-   croak("Routine can only handle scalars or refs to N-D arrays of scalars");
+   Perl_croak(aTHX_ "Routine can only handle scalars or refs to N-D arrays of scalars");
    
 }
 
@@ -509,13 +566,11 @@ void unpack1D ( SV* arg, void * var, char packtype, int n ) {
    /* n is the size of array var[] (n=1 for 1 element, etc.) If n=0 take
       var[] as having the same dimension as array referenced by arg */
    
-   int* ivar;
-   float* fvar;
-   double* dvar;
-   short* svar;
-   unsigned char* uvar;
-   double foo;
-   SV* work;
+   int* ivar = NULL;
+   float* fvar = NULL;
+   double* dvar = NULL;
+   short* svar = NULL;
+   unsigned char* uvar = NULL;
    AV* array;
    I32 i,m;
 
@@ -526,7 +581,7 @@ void unpack1D ( SV* arg, void * var, char packtype, int n ) {
 
    if (packtype!='f' && packtype!='i' && packtype!= 'd' &&
        packtype!='u' && packtype!='s')
-       croak("Programming error: invalid type conversion specified to unpack1D");
+       Perl_croak(aTHX_ "Programming error: invalid type conversion specified to unpack1D");
    
    m=n;  array = coerce1D( arg, m );   /* Get array ref and coerce */
    
@@ -624,7 +679,7 @@ void* get_mortalspace( int n, char packtype ) {
    
    if (packtype!='f' && packtype!='i' && packtype!='d'
        && packtype!='u' && packtype!='s' && packtype!='v')
-     croak("Programming error: invalid type conversion specified to get_mortalspace");
+     Perl_croak(aTHX_ "Programming error: invalid type conversion specified to get_mortalspace");
 
    work = sv_2mortal(newSVpv("", 0));
    

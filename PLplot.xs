@@ -30,20 +30,83 @@ extern "C" {
 }
 #endif
 
+#include "plplot/plplotP.h"
 #include "plplot/plplot.h"
 #include "arrays.h"
+char ** pack1Dchar( AV * );
+char ** pack1Dchar_sz( AV * , int * );
+AV * unpack1Dchar(char **, int );
+
+/* Use typedef for StripChart ID */
+typedef PLINT PLSTRIPID;
+
+/* For 2D perl arrays */
+typedef PLFLT PLFLT2D;
+
+
+/* Helper routine for packing string arrays */
+
+char ** pack1Dchar( AV * avref ) {
+  int nelem;
+  return pack1Dchar_sz( avref, &nelem );
+}
+
+char ** pack1Dchar_sz( AV * avref, int * nelem ) {
+  int i;
+  SV ** elem;
+  char ** outarr;
+  int len;
+  STRLEN linelen;
+ 
+  /* number of elements */
+  len  = av_len( avref ) + 1;
+  /* Temporary storage */
+  outarr = get_mortalspace( len,'v');
+ 
+  for (i=0; i<len; i++) {
+    elem = av_fetch( avref, i, 0);
+    if (elem == NULL ) {
+      /* undef */
+      char * temp = get_mortalspace(1,'c');
+      temp = "\0";
+      outarr[i] = temp;
+    } else {
+      outarr[i] = SvPV( *elem, linelen);
+    }
+  }
+  if (nelem != NULL) *nelem = len;
+  return outarr;
+}
+
+/* Helper routine for unpacking char ** */
+
+AV* unpack1Dchar( char ** inarr, int nelem ) {
+   AV* arr = newAV();
+   SV * string;
+   SV** elem;
+   int i;
+
+   for (i = 0; i < nelem ; i++ ) {
+       string = newSVpv( inarr[i], 0);
+       elem = av_store(  arr, i, string );
+       if (elem == NULL)
+          SvREFCNT_dec(string);
+   }
+   return arr;
+}
+
 
 MODULE = Graphics::PLplot     PACKAGE = Graphics::PLplot PREFIX = c_
 
 
 void
-pl_setcontlabelformat( lexp, sigdig )
+c_pl_setcontlabelformat( lexp, sigdig )
   PLFLT lexp
   PLFLT sigdig
 
 
 void
-pl_setcontlabelparam( offset, size, active, spacing )
+c_pl_setcontlabelparam( offset, size, active, spacing )
   PLFLT offset
   PLFLT size
   PLFLT active
@@ -70,10 +133,8 @@ c_plbin( x, y, center )
   PLFLT * x
   PLFLT * y
   PLINT center
- PREINIT:
-  PLINT len = av_len( (AV*)SvRV(ST(0)) ) + 1;
  CODE:
-  c_plbin( len, x, y, center);
+  c_plbin( ix_x, x, y, center);
 
 void
 c_plbop()
@@ -183,10 +244,8 @@ c_plerrx( xmin, xmax, y )
   PLFLT * xmin
   PLFLT * xmax
   PLFLT * y
- PREINIT:
-  PLINT n = av_len( (AV*)SvRV(ST(0)) ) + 1;
  CODE:
-  c_plerrx( n, xmin, xmax, y );
+  c_plerrx( ix_y, xmin, xmax, y );
 
 
 void
@@ -194,10 +253,8 @@ c_plerry( x, ymin, ymax )
   PLFLT * x
   PLFLT * ymin
   PLFLT * ymax
- PREINIT:
-  PLINT n = av_len( (AV*)SvRV(ST(0)) ) + 1;
  CODE:
-  c_plerry( n, x, ymin, ymax );
+  c_plerry( ix_x, x, ymin, ymax );
 
 void
 c_plfamadv()
@@ -206,20 +263,16 @@ void
 c_plfill( x, y )
   PLFLT * x
   PLFLT * y
- PREINIT:
-  PLINT len = av_len( (AV*)SvRV(ST(0)) ) + 1;
  CODE:
-  c_plfill( len, x, y );
+  c_plfill( ix_x, x, y );
 
 void
 c_plfill3( x, y, z )
   PLFLT * x
   PLFLT * y
   PLFLT * z
- PREINIT:
-  PLINT len = av_len( (AV*)SvRV(ST(0)) ) + 1;
  CODE:
-  c_plfill3( len, x, y, z );
+  c_plfill3( ix_x, x, y, z );
 
 
 # plflush
@@ -486,13 +539,57 @@ c_plhist( data, datmin, datmax, nbin, oldwin )
   PLFLT datmax
   PLINT nbin
   PLINT oldwin
- PREINIT:
-  PLINT len = av_len( (AV*)SvRV(ST(0)) ) + 1;
  CODE:
-  c_plhist( len, data, datmin, datmax, nbin, oldwin);
+  c_plhist( ix_data, data, datmin, datmax, nbin, oldwin);
 
 
 # plhls is now deprecated
+
+# plimage - takes 2D perl array [see PGPLOT::pgimag]
+# You should be using PDL instead
+#  Currently do not determine nx and ny from data
+
+void
+c_plimage( pdata,xmin, xmax, ymin, ymax, zmin, zmax, Dxmin, Dxmax, Dymin, Dymax, ...)
+  PLFLT2D * pdata
+  PLFLT xmin
+  PLFLT xmax
+  PLFLT ymin
+  PLFLT ymax
+  PLFLT zmin
+  PLFLT zmax
+  PLFLT Dxmin
+  PLFLT Dxmax
+  PLFLT Dymin
+  PLFLT Dymax
+ PREINIT:
+  PLFLT ** data;
+  int i;
+  int j;
+  int k = 0;
+ CODE:
+  /* Allow two additional optional arguments */
+  if (items < 11 || items > 13)
+        Perl_croak(aTHX_ "Usage: Graphics::PLplot::plimage(pdata, xmin, xmax, ymin, ymax, zmin, zmax, Dxmin, Dxmax, Dymin,Dymax,[nx,ny]");
+
+  /* Read optional arguments */
+  if (items > 11)
+    nx_pdata = (PLINT)SvIV(ST(11));
+  if (items > 12)
+    ny_pdata = (PLINT)SvIV(ST(12));
+
+  /* this is incredibly inefficient since we go from a 2D perl array
+     to some C memory to some more C memory. Needs tidying up a lot.
+     May as well just support a serialised 1D perl array */
+  plAlloc2dGrid(&data, nx_pdata, ny_pdata);
+  for (i = 0; i < nx_pdata; i++) {
+    for (j = 0; j < ny_pdata; j++) {
+      data[i][j] = pdata[k];
+      k++;
+    }
+  }
+  plimage( data, nx_pdata, ny_pdata, xmin, xmax, ymin, ymax, zmin, zmax, Dxmin, Dxmax, Dymin, Dymax);
+  plFree2dGrid(data,nx_pdata,ny_pdata);
 
 
 # plinit
@@ -528,20 +625,16 @@ void
 c_plline( x, y )
   PLFLT * x
   PLFLT * y
- PREINIT:
-  PLINT len = av_len( (AV*)SvRV(ST(0)) ) + 1;
  CODE:
-  c_plline( len, x, y );
+  c_plline( ix_x, x, y );
 
 void
 c_plline3( x, y, z )
   PLFLT * x
   PLFLT * y
   PLFLT * z
- PREINIT:
-  PLINT len = av_len( (AV*)SvRV(ST(0)) ) + 1;
  CODE:
-  c_plline3( len, x, y, z );
+  c_plline3( ix_x, x, y, z );
 
 void
 c_pllsty( input )
@@ -579,10 +672,8 @@ void
 c_plpat( inc, del )
   PLINT * inc
   PLINT * del
- PREINIT:
-  PLINT len = av_len( (AV*)SvRV(ST(0)) ) + 1;
  CODE:
-  c_plpat( len, inc, del);
+  c_plpat( ix_inc, inc, del);
 
 
 
@@ -593,10 +684,8 @@ c_plpoin( x, y, code )
   PLFLT * x
   PLFLT * y
   PLINT code
- PREINIT:
-  PLINT len = av_len( (AV*)SvRV(ST(0)) ) + 1;
  CODE:
-  c_plpoin( len, x, y, code);
+  c_plpoin( ix_x, x, y, code);
 
 void
 c_plpoin3( x, y, z, code )
@@ -604,10 +693,8 @@ c_plpoin3( x, y, z, code )
   PLFLT * y
   PLFLT * z
   PLINT code
- PREINIT:
-  PLINT len = av_len( (AV*)SvRV(ST(0)) ) + 1;
  CODE:
-  c_plpoin3( len, x, y, z, code);
+  c_plpoin3( ix_x, x, y, z, code);
 
 void
 c_plpoly3( x, y, z, draw, ifcc )
@@ -616,10 +703,8 @@ c_plpoly3( x, y, z, draw, ifcc )
   PLFLT * z
   PLINT * draw
   PLINT ifcc
- PREINIT:
-  PLINT len = av_len( (AV*)SvRV(ST(0)) ) + 1;
  CODE:
-  c_plpoly3( len, x, y, z, draw, ifcc);
+  c_plpoly3( ix_x, x, y, z, draw, ifcc);
 
 void
 c_plprec( set, prec )
@@ -658,10 +743,8 @@ c_plscmap0( r, g, b )
   PLINT * r
   PLINT * g
   PLINT * b
- PREINIT:
-  PLINT len = av_len( (AV*)SvRV(ST(0)) ) + 1;
  CODE:
-  c_plscmap0( r, g, b, len );
+  c_plscmap0( r, g, b, ix_r );
 
 void
 c_plscmap0n( ncol0 )
@@ -672,12 +755,11 @@ c_plscmap1( r, g, b )
   PLINT * r
   PLINT * g
   PLINT * b
- PREINIT:
-  PLINT len = av_len( (AV*)SvRV(ST(0)) ) + 1;
  CODE:
-  c_plscmap1( r, g, b, len );
+  c_plscmap1( r, g, b, ix_r );
 
-# plscmap1l - need to allow rev to be an empty array. XXXXX
+# plscmap1l - need to allow rev to be an empty array
+#   If @rev is empty we pass a NULL to the C routine.
 
 void
 c_plscmap1l(itype, pos, coord1, coord2, coord3, rev)
@@ -687,10 +769,9 @@ c_plscmap1l(itype, pos, coord1, coord2, coord3, rev)
   PLFLT * coord2
   PLFLT * coord3
   PLINT * rev
- PREINIT:
-  PLINT len = av_len( (AV*)SvRV(ST(0)) ) + 1;
  CODE:
-  c_plscmap1l( itype, len, pos, coord1, coord2, coord3, rev);
+  if (ix_rev == 0) rev ==NULL;
+  c_plscmap1l( itype, ix_pos, pos, coord1, coord2, coord3, rev);
 
 
 void
@@ -832,16 +913,93 @@ c_plstart(device, nx, ny)
   PLINT nx
   PLINT ny
 
+# Strip chart stuff goes in its own namespace
+
+# This does not look like a constructor
+
+PLSTRIPID
+c_plstripc(xspec,yspec,xmin,xmax,xjump,ymin,ymax,xlpos,ylpos,y_ascl,acc,colbox, collab,colline,styline,legline,labx,laby,labtop)
+  char * xspec
+  char * yspec
+  PLFLT xmin
+  PLFLT xmax
+  PLFLT xjump
+  PLFLT ymin
+  PLFLT ymax
+  PLFLT xlpos
+  PLFLT ylpos
+  bool  y_ascl
+  bool  acc
+  PLINT colbox
+  PLINT collab
+  PLINT * colline
+  PLINT * styline
+  char ** legline
+  char * labx
+  char * laby
+  char * labtop
+ CODE:
+   c_plstripc( &RETVAL, xspec, yspec, xmin, xmax, xjump, ymin, ymax, xlpos, ylpos, (PLINT)y_ascl, (PLINT)acc, colbox, collab, colline, styline, legline, labx, laby, labtop);
+ OUTPUT:
+  RETVAL
+
+MODULE = Graphics::PLplot   PACKAGE = Graphics::PLplot::StripChart PREFIX = c_
+
+# Provide an alias in the standard namespace for non method use
+
 void
 c_plstripa(id, p, x, y)
-  PLINT id
+  PLSTRIPID id
   PLINT p
   PLFLT x
   PLFLT y
+ ALIAS:
+  Graphics::PLplot::plstripa = 1
 
-#PLINT
-#c_plstripc(xspec,yspec,xmin,xmax,xjump,ymin,ymax,xlpos,ylpos,y_ascl,acc,colbox, collab,colline,styline,legline,labx,laby,labtop)
-# CODE:
+# plstripd - implemented as auto destructor
+
+void
+DESTROY( id )
+  PLSTRIPID id
+CODE:
+  c_plstripd( id );
+
+# Back to the normal namespace
+
+MODULE = Graphics::PLplot   PACKAGE = Graphics::PLplot PREFIX = c_
+
+
+# plsurf3d
+
+void
+c_plsurf3d( x, y, z, opt, clevel )
+  PLFLT * x
+  PLFLT * y
+  PLFLT2D * z
+  PLINT opt
+  PLFLT * clevel
+ PREINIT:
+  PLFLT ** zdata;
+  int i;
+  int j;
+  int k = 0;
+ CODE:
+  if (ix_x != nx_z)
+     Perl_croak(aTHX_ "Dimension of X array must be same as first dimension of Z array [%d != %d]",ix_x,nx_z);
+  if (ix_y != ny_z)
+     Perl_croak(aTHX_ "Dimension of Y array must be same as first dimension of Z array [%d != %d]",ix_y,ny_z);
+
+  /* this is incredibly inefficient since we go from a 2D perl array
+     to some C memory to some more C memory. Needs tidying up a lot.
+     May as well just support a serialised 1D perl array */
+  plAlloc2dGrid(&zdata, nx_z, ny_z);
+  for (i = 0; i < nx_z; i++) {
+    for (j = 0; j < ny_z; j++) {
+      zdata[i][j] = z[k];
+      k++;
+    }
+  }
+  plsurf3d(x,y,zdata,nx_z,ny_z,opt,clevel, ix_clevel);
 
 
 
@@ -851,10 +1009,14 @@ void
 c_plstyl( mark, space )
   PLINT * mark
   PLINT * space
- PREINIT:
-  PLINT nels = av_len( (AV*)SvRV(ST(0)) ) + 1;
  CODE:
-  c_plstyl( nels, mark, space );
+  c_plstyl( ix_mark, mark, space );
+
+
+void
+c_plsxax( digimax, digits )
+  PLINT digimax
+  PLINT digits
 
 
 void
@@ -862,24 +1024,45 @@ c_plsyax( digimax, digits )
   PLINT digimax
   PLINT digits
 
-# plpoin
-
-void
-c_plsym( x, y, code )
-  PLFLT * x
-  PLFLT * y
-  PLINT code
- PREINIT:
-  PLINT len = av_len( (AV*)SvRV(ST(0)) ) + 1;
- CODE:
-  c_plsym( len, x, y, code);
-
 void
 c_plsvpa(xmin, xmax, ymin, ymax)
   PLFLT xmin
   PLFLT xmax
   PLFLT ymin
   PLFLT ymax
+
+
+void
+c_plszax( digimax, digits )
+  PLINT digimax
+  PLINT digits
+
+
+# plsym
+
+void
+c_plsym( x, y, code )
+  PLFLT * x
+  PLFLT * y
+  PLINT code
+ CODE:
+  c_plsym( ix_x, x, y, code);
+
+void
+c_pltext()
+
+void
+c_plvasp(aspect)
+  PLFLT aspect
+
+void
+c_plvpas(xmin, xmax, ymin, ymax,aspect)
+  PLFLT xmin
+  PLFLT xmax
+  PLFLT ymin
+  PLFLT ymax
+  PLFLT aspect
+
 
 void
 c_plvpor( xmin, xmax, ymin, ymax )
@@ -892,6 +1075,20 @@ void
 c_plvsta()
 
 void
+c_plw3d(basex,basey,height,xmin,xmax,ymin,ymax,zmin,zmax,alt,az )
+  PLFLT basex
+  PLFLT basey
+  PLFLT height
+  PLFLT xmin
+  PLFLT xmax
+  PLFLT ymin
+  PLFLT ymax
+  PLFLT zmin
+  PLFLT zmax
+  PLFLT alt
+  PLFLT az
+
+void
 c_plwid( width )
   PLINT width
 
@@ -901,3 +1098,276 @@ c_plwind( xmin, xmax, ymin, ymax )
   PLFLT xmax
   PLFLT ymin
   PLFLT ymax
+
+bool
+c_plxormod( mode )
+  bool mode
+ PREINIT:
+  PLINT status;
+ CODE:
+  c_plxormod( (PLINT)mode, &status);
+  RETVAL = status;
+ OUTPUT:
+  RETVAL
+
+### The C specific routines
+
+void
+plgFileDevs()
+ PREINIT:
+  char ** menustr;
+  char ** devname;
+  int ndev;
+ PPCODE:
+  /* Guess at largest number of drivers !! */
+  menustr = get_mortalspace( 1024, 'v');
+  devname = get_mortalspace( 1024, 'v');
+  plgFileDevs(&menustr, &devname, &ndev);
+  XPUSHs( newRV_noinc( (SV*)unpack1Dchar( menustr, ndev) ));
+  XPUSHs( newRV_noinc( (SV*)unpack1Dchar( devname, ndev) ));
+
+void
+plgDevs()
+ PREINIT:
+  char ** menustr;
+  char ** devname;
+  int ndev;
+ PPCODE:
+  /* Guess at largest number of drivers !! */
+  menustr = get_mortalspace( 1024, 'v');
+  devname = get_mortalspace( 1024, 'v');
+  plgDevs(&menustr, &devname, &ndev);
+  XPUSHs( newRV_noinc( (SV*)unpack1Dchar( menustr, ndev) ));
+  XPUSHs( newRV_noinc( (SV*)unpack1Dchar( devname, ndev) ));
+
+## plsKeyEH - XXXXX not yet
+
+## plsButtonEH - XXXXX not yet
+
+## plsbobH     - XXXXX not yet
+
+## plseopH     - XXXXX not yet
+
+## plsError    - XXXXX not yet decided
+
+## plsexit     - XXXXX not yet
+
+## plsabort    - XXXXX not yet
+
+
+## plClearOpts
+
+void
+plClearOpts()
+
+void
+plResetOpts()
+
+
+# Returns status and all the unprocessed contents of @ARGV in ref to array
+
+void
+plParseOpts( argv, mode )
+  char ** argv
+  PLINT mode
+ PREINIT:
+  int status;
+ PPCODE:
+  /* $ARGV[0] is not the program name in perl */
+  status = plParseOpts( &ix_argv, argv, mode | PL_PARSE_NOPROGRAM );
+  XPUSHs( sv_2mortal(newSViv(status) ));  
+  XPUSHs( newRV_noinc( (SV*)unpack1Dchar( argv, ix_argv) ));
+
+
+# plMergeOpts should be done by perl GetOpt::Long
+
+
+
+void
+plSetUsage( program_string, usage_string )
+  char * program_string
+  char * usage_string
+
+void
+plOptUsage()
+
+# This may cause problems since perl may well attempt to close
+# this file itself
+
+FILE *
+plgfile()
+ CODE:
+  plgfile(&RETVAL);
+ OUTPUT:
+  RETVAL
+
+void
+plsfile( file )
+  FILE * file
+
+char
+plgesc()
+ CODE:
+   plgesc(&RETVAL);
+ OUTPUT:
+   RETVAL
+
+# Not really much need for plFindName or plFindCommand etc
+
+# plGetCursor - return list of keyword value pairs
+#  If not translation to world coordinates is possible, they
+#  are not returned in the list
+
+void
+plGetCursor()
+ PREINIT:
+   PLGraphicsIn gin;
+   int status;
+ PPCODE:
+  status = plGetCursor( &gin );
+  XPUSHs(sv_2mortal(newSVpv( "dX", 0 )));
+  XPUSHs(sv_2mortal(newSVnv( gin.dX )));
+  XPUSHs(sv_2mortal(newSVpv( "dY", 0 )));
+  XPUSHs(sv_2mortal(newSVnv( gin.dY )));
+  XPUSHs(sv_2mortal(newSVpv( "pX", 0 )));
+  XPUSHs(sv_2mortal(newSVnv( gin.pX )));
+  XPUSHs(sv_2mortal(newSVpv( "pY", 0 )));
+  XPUSHs(sv_2mortal(newSVnv( gin.pY )));
+  if (status == 1 ) {
+    XPUSHs(sv_2mortal(newSVpv( "wX", 0 )));
+    XPUSHs(sv_2mortal(newSVnv( gin.wX )));
+    XPUSHs(sv_2mortal(newSVpv( "wY", 0 )));
+    XPUSHs(sv_2mortal(newSVnv( gin.wY )));
+    XPUSHs(sv_2mortal(newSVpv( "subwindow", 0 )));
+    XPUSHs(sv_2mortal(newSViv( gin.subwindow )));
+  }
+  XPUSHs(sv_2mortal(newSVpv( "state", 0 )));
+  XPUSHs(sv_2mortal(newSVuv( gin.state )));
+  XPUSHs(sv_2mortal(newSVpv( "keysym", 0 )));
+  XPUSHs(sv_2mortal(newSVuv( gin.keysym )));
+  XPUSHs(sv_2mortal(newSVpv( "button", 0 )));
+  XPUSHs(sv_2mortal(newSVuv( gin.button )));
+  XPUSHs(sv_2mortal(newSVpv( "string", 0 )));
+  XPUSHs(sv_2mortal(newSVpv( gin.string, 0 )));
+
+char*
+plP_getinitdriverlist()
+  PREINIT:
+    char buffer[1024];
+  CODE:
+    RETVAL = buffer;
+    plP_getinitdriverlist( buffer );
+  OUTPUT:
+    RETVAL
+
+bool
+plP_checkdriverinit(list)
+  char * list
+
+
+### PRIVATE ROUTINES that should not be exported
+
+PLFLT
+plstrl( string )
+  char * string
+
+
+MODULE = Graphics::PLplot  PACKAGE = Graphics::PLplot PREFIX = PL_
+
+int
+PL_PARSE_FULL()
+ PROTOTYPE:
+ CODE:
+  RETVAL = PL_PARSE_FULL;
+ OUTPUT:
+  RETVAL
+
+int
+PL_PARSE_QUIET()
+ PROTOTYPE:
+ CODE:
+  RETVAL = PL_PARSE_QUIET;
+ OUTPUT:
+  RETVAL
+
+int
+PL_PARSE_NODELETE()
+ PROTOTYPE:
+ CODE:
+  RETVAL = PL_PARSE_NODELETE;
+ OUTPUT:
+  RETVAL
+
+int
+PL_PARSE_SHOWALL()
+ PROTOTYPE:
+ CODE:
+  RETVAL = PL_PARSE_SHOWALL;
+ OUTPUT:
+  RETVAL
+
+int
+PL_PARSE_NODASH()
+ PROTOTYPE:
+ CODE:
+  RETVAL = PL_PARSE_NODASH;
+ OUTPUT:
+  RETVAL
+
+int
+PL_PARSE_SKIP()
+ PROTOTYPE:
+ CODE:
+  RETVAL = PL_PARSE_SKIP;
+ OUTPUT:
+  RETVAL
+
+
+int
+FACETED()
+ PROTOTYPE:
+ CODE:
+  RETVAL = FACETED;
+ OUTPUT:
+  RETVAL
+
+
+int
+MAG_COLOR()
+ PROTOTYPE:
+ CODE:
+  RETVAL = MAG_COLOR;
+ OUTPUT:
+  RETVAL
+
+int
+SURF_CONT()
+ PROTOTYPE:
+ CODE:
+  RETVAL = SURF_CONT;
+ OUTPUT:
+  RETVAL
+
+int
+BASE_CONT()
+ PROTOTYPE:
+ CODE:
+  RETVAL = BASE_CONT;
+ OUTPUT:
+  RETVAL
+
+int
+DRAW_SIDES()
+ PROTOTYPE:
+ CODE:
+  RETVAL = DRAW_SIDES;
+ OUTPUT:
+  RETVAL
+
+
+
+
+
+
+
+

@@ -1,7 +1,6 @@
 #!perl
 
-# Perl version of the PLplot C x02c.c example [colored text]
-
+# Perl version of the PLplot C x12c.c Bar Chart demo
 #
 # This version Copyright (C) 2004 Tim Jenness. All Rights Reserved.
 #
@@ -22,49 +21,50 @@
 use strict;
 use Test::More tests => 1;
 use Math::Trig qw/ pi /;
-use Data::Dumper;
 BEGIN {
   use_ok("Graphics::PLplot");
   Graphics::PLplot->import(qw/ :all /);
 }
 my $sleep = 2;
-print "# Version: ". plgver() ."\n";
-
-# 16 regions
-plssub( 4, 4);
-
-# Initialise plplot 
+print "# Version: ". &plgver() ."\n";
 
 plsdev( "xwin" );
 plinit();
+pladv(0);
 
-plschr( 0.0, 3.5 );
-plfont( 4 );
 
-for ( my $i = 0; $i <= 15 ; $i ++ ) {
-  plcol0( $i );
-  my $text = $i;
-  pladv( 0 );
-  my $vmin = 0.1;
-  my $vmax = 0.9;
+plvsta();
+plwind(1980.0, 1990.0, 0.0, 35.0);
+plbox("bc", 1.0, 0, "bcnv", 10.0, 0);
+plcol0(2);
+pllab("Year", "Widget Sales (millions)", "#frPLplot Example 12");
 
-  for (my $j = 0; $j <= 2; $j++ ) {
-    plwid( $j + 1 );
-    plvpor( $vmin, $vmax, $vmin, $vmax );
-    plwind( 0.0, 1.0, 0.0, 1.0);
-    plbox( "bc", 0, 0, "bc", 0, 0);
-    $vmin += 0.1;
-    $vmax -= 0.1;
-  }
-  plwid( 1 );
-  plptex( 0.5, 0.5, 1.0, 0.0, 0.5, $text );
+my @y0 = ( 5, 15, 22, 24, 28, 30, 20, 8, 12, 3);
+
+for my $i (0..9) {
+  plcol0( $i + 1 );
+  plpsty(0);
+  plfbox( ( 1980 + $i ), $y0[$i]);
+  plptex( ( 1980 + $i + 0.5), ($y0[$i]+1),1,0.0,.5,$y0[$i]);
+  plmtex("b",1,(($i+1) * 0.1 - 0.05), 0.5, (1980+$i));
+
 }
-
+plspause(0);
 plflush();
 sleep($sleep);
-plspause(0);
 plend();
 
 print "# Ending \n";
 
 exit;
+
+sub plfbox {
+  my ($x0, $y0) = @_;
+  my @x = ( $x0, $x0, $x0+1, $x0+1);
+  my @y = ( 0, $y0, $y0, 0);
+
+  plfill(\@x, \@y);
+  plcol0(1);
+  pllsty(1);
+  plline(\@x, \@y);
+}

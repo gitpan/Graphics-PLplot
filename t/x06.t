@@ -1,7 +1,6 @@
 #!perl
 
-# Perl version of the PLplot C x02c.c example [colored text]
-
+# Perl version of the PLplot C x06c.c Font demo
 #
 # This version Copyright (C) 2004 Tim Jenness. All Rights Reserved.
 #
@@ -22,47 +21,54 @@
 use strict;
 use Test::More tests => 1;
 use Math::Trig qw/ pi /;
-use Data::Dumper;
 BEGIN {
   use_ok("Graphics::PLplot");
   Graphics::PLplot->import(qw/ :all /);
 }
 my $sleep = 2;
-print "# Version: ". plgver() ."\n";
-
-# 16 regions
-plssub( 4, 4);
-
-# Initialise plplot 
+print "# Version: ". &plgver() ."\n";
 
 plsdev( "xwin" );
 plinit();
+pladv(0);
 
-plschr( 0.0, 3.5 );
-plfont( 4 );
+# Set up viewport and window
+plcol0(2);
+plvpor(0.1, 1.0, 0.1, 0.9);
+plwind(0,1,0,1.3);
 
-for ( my $i = 0; $i <= 15 ; $i ++ ) {
-  plcol0( $i );
-  my $text = $i;
-  pladv( 0 );
-  my $vmin = 0.1;
-  my $vmax = 0.9;
+# Draw the grid
+plbox("bcgt",0.1,0,"bcgt",0.1,0);
 
-  for (my $j = 0; $j <= 2; $j++ ) {
-    plwid( $j + 1 );
-    plvpor( $vmin, $vmax, $vmin, $vmax );
-    plwind( 0.0, 1.0, 0.0, 1.0);
-    plbox( "bc", 0, 0, "bc", 0, 0);
-    $vmin += 0.1;
-    $vmax -= 0.1;
-  }
-  plwid( 1 );
-  plptex( 0.5, 0.5, 1.0, 0.0, 0.5, $text );
+# Write digits below the frame
+plcol0(15);
+for my $i (0..9) {
+  plmtex("b",1.5,(0.1*$i + 0.05), 0.5,$i);
 }
 
+my $k = 0;
+OUTER: for my $i ( 0..12) {
+
+  # Write the digits to the left of the frame
+  plmtex("lv",1,(1-(2*$i+1)/26),1,$i);
+
+  my $y = 1.25 - 0.1 * $i;
+  for my $j ( 0..9 ) {
+
+    my $x = 0.1 * $j + 0.05;
+
+    # Need to use ref to array even with one element
+    plpoin([$x], [$y], $k );
+    last OUTER if $k >= 127;
+    $k++;
+  }
+}
+
+plmtex("t",1.5,0.5,0.5, "PLplot Example 6 - plpoin symbols");
+
+plspause(0);
 plflush();
 sleep($sleep);
-plspause(0);
 plend();
 
 print "# Ending \n";

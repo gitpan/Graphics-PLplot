@@ -1,7 +1,6 @@
 #!perl
 
-# Perl version of the PLplot C x02c.c example [colored text]
-
+# Perl version of the PLplot C x10c.c Window positioning demo
 #
 # This version Copyright (C) 2004 Tim Jenness. All Rights Reserved.
 #
@@ -22,47 +21,30 @@
 use strict;
 use Test::More tests => 1;
 use Math::Trig qw/ pi /;
-use Data::Dumper;
 BEGIN {
   use_ok("Graphics::PLplot");
   Graphics::PLplot->import(qw/ :all /);
 }
 my $sleep = 2;
-print "# Version: ". plgver() ."\n";
-
-# 16 regions
-plssub( 4, 4);
-
-# Initialise plplot 
+print "# Version: ". &plgver() ."\n";
 
 plsdev( "xwin" );
 plinit();
+pladv(0);
 
-plschr( 0.0, 3.5 );
-plfont( 4 );
+# Set up viewport and window
+plvpor(0, 1, 0, 1);
+plwind(0, 1, 0, 1);
+plbox("bc",0,0,"bc",0,0);
 
-for ( my $i = 0; $i <= 15 ; $i ++ ) {
-  plcol0( $i );
-  my $text = $i;
-  pladv( 0 );
-  my $vmin = 0.1;
-  my $vmax = 0.9;
+plsvpa(50,150,50,100);
+plwind(0,1,0,1);
+plbox("bc",0,0,"bc",0,0);
+plptex(0.5,0.5,1,0,0.5,"BOX at (50,150,50,100)");
 
-  for (my $j = 0; $j <= 2; $j++ ) {
-    plwid( $j + 1 );
-    plvpor( $vmin, $vmax, $vmin, $vmax );
-    plwind( 0.0, 1.0, 0.0, 1.0);
-    plbox( "bc", 0, 0, "bc", 0, 0);
-    $vmin += 0.1;
-    $vmax -= 0.1;
-  }
-  plwid( 1 );
-  plptex( 0.5, 0.5, 1.0, 0.0, 0.5, $text );
-}
-
+plspause(0);
 plflush();
 sleep($sleep);
-plspause(0);
 plend();
 
 print "# Ending \n";
