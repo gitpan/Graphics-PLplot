@@ -1,8 +1,8 @@
 MANIFEST
 README
 Makefile.PL
-PLPLOT.pm
-PLPLOT.xs
+PLplot.pm
+PLplot.xs
 typemap
 arrays.c
 arrays.h
@@ -11,3 +11,4 @@ t/x02.t
 t/x03.t
 t/x04.t
 t/x05.t
+META.yml                                 Module meta-data (added by MakeMaker)

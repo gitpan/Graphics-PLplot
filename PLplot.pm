@@ -1,8 +1,8 @@
-package Graphics::PLPLOT;
+package Graphics::PLplot;
 
 =head1 NAME
 
-Graphics::PLPLOT - Perl interface to the PLPLOT plotting library
+Graphics::PLplot - Perl interface to the PLplot plotting library
 
 =head1 SYNOPSIS
 
@@ -19,7 +19,7 @@ Graphics::PLPLOT - Perl interface to the PLPLOT plotting library
 
 =head1 DESCRIPTION
 
-This module provides a perl interface to the PLPLOT plotting library
+This module provides a perl interface to the PLplot plotting library
 available from http://www.plplot.org. The interface is very similar
 to the C interface except that:
 
@@ -31,7 +31,7 @@ to the C interface except that:
 =cut
 
 use vars qw/ $VERSION %EXPORT_TAGS /;
-$VERSION = '0.01';
+$VERSION = '0.02';
 
 require DynaLoader;
 require Exporter;
@@ -39,7 +39,7 @@ use base qw/ Exporter DynaLoader /;
 
 # Setup export tags
 # Simple to generate from XS:
-# cat grep c_pl PLPLOT.xs | awk -F\( '{print $1}' | sort | uniq
+# cat grep c_pl PLplot.xs | awk -F\( '{print $1}' | sort | uniq
 %EXPORT_TAGS = (
 		
 		'all'=>[qw/
@@ -61,24 +61,86 @@ use base qw/ Exporter DynaLoader /;
 			   pleop
 			   plerrx
 			   plerry
+			   plfamadv
+			   plfill
+			   plfill3
 			   plflush
 			   plfont
 			   plfontld
+			   plgchr
+			   plgcol0
+			   plgcolbg
+			   plgcompression
+			   plgdev
+			   plgdidev
+			   plgdiori
+			   plgdiplt
+			   plgfam
+			   plgfnam
+			   plglevel
+			   plgpage
+			   plgra
+			   plgspa
+			   plgstrm
 			   plgver
+			   plgvpd
+			   plgvpw
+			   plgxax
+			   plgyax
+			   plgzax
 			   plhist
 			   plinit
 			   pljoin
 			   pllab
+			   pllightsource
 			   plline
+			   plline3
+			   pllsty
+			   plmkstrm
 			   plmtex
+			   plpat
 			   plpoin
+			   plpoin3
+			   plpoly3
+			   plprec
+			   plpsty
 			   plptex
+			   plreplot
 			   plschr
+			   plscmap0
+			   plscmap0n
+			   plscmap1
+			   plscmap1l
+			   plscmap1n
+			   plscol0
+			   plscolbg
+			   plscolor
+			   plscompression
 			   plsdev
+			   plsdidev
+			   plsdiori
+			   plsdiplt
+			   plsdiplz
+			   plsesc
+			   plsetopt
+			   plsfam
+			   plsfnam
+			   plsmaj
+			   plsmin
+			   plsori
+			   plspage
+			   plspause
+			   plsstrm
 			   plssub
+			   plssym
+			   plstar
+			   plstart
+			   plstripa
+			   plstripc
 			   plstyl
 			   plsyax
 			   plsym
+			   plsvpa
 			   plvpor
 			   plvsta
 			   plwid
@@ -88,31 +150,31 @@ use base qw/ Exporter DynaLoader /;
 
 Exporter::export_tags('all');
 
-bootstrap Graphics::PLPLOT $VERSION;
+bootstrap Graphics::PLplot $VERSION;
 
 =head1 EXAMPLES
 
 This module is distributed with Perl versions of many of the C example
-files that are distributed as part of PLPLOT itself. They can be
+files that are distributed as part of PLplot itself. They can be
 used to learn the Perl interface.
 
 =head1 TODO
 
-This module is not yet complete since only a subset of the PLPLOT
+This module is not yet complete since only a subset of the PLplot
 functions are available. More will be added as I get time to implement
 them.
 
 =head1 SEE ALSO
 
-The L<PDL::Graphics::PLPLOT> module (distributed with L<PDL|PDL>
+The L<PDL::Graphics::PLplot> module (distributed with L<PDL|PDL>
 is more suitable for plotting large data arrays. This module exists
 primarily for cases where a dependency on PDL is not desirable.
 
-The PLPLOT library is very similar to the PGPLOT library (see
+The PLplot library is very similar to the PGPLOT library (see
 the L<PGPLOT|PGPLOT> module).
 
 The L<Starlink::AST|Starlink::AST> module provides a graphics
-interface to this PLPLOT module.
+interface to this PLplot module.
 
 =head1 AUTHOR
 
